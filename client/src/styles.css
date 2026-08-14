@@ -1,0 +1,42 @@
+:root {
+  color: #231f20;
+  background: #f8f8f8;
+  font-family: "Noto Sans", system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.panel {
+  max-width: 560px;
+  background: #ffffff;
+  border: 1px solid #e8e2e0;
+  border-radius: 8px;
+  padding: 32px;
+  box-shadow: 0 2px 6px rgb(35 31 32 / 6%);
+}
+
+.eyebrow {
+  color: #ff6b00;
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0 0 12px;
+}
+
+h1 {
+  margin: 0 0 16px;
+  font-size: 32px;
+  line-height: 1.1;
+}
+
+p {
+  line-height: 1.6;
+}
