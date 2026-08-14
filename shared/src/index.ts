@@ -18,6 +18,13 @@ export type ProjectStatus =
 
 export type StepState = "idle" | "running" | "failed";
 
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: string;
+}
+
 export interface Character {
   id: string;
   name: string;
@@ -36,7 +43,9 @@ export interface Chapter {
 
 export interface Project {
   id: string;
+  userId: string;
   title: string;
+  bookPath: string;
   status: ProjectStatus;
   stepState: StepState;
   runningStep: PipelineStep | null;
