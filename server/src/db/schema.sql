@@ -12,9 +12,24 @@ CREATE TABLE IF NOT EXISTS projects (
   user_id TEXT NOT NULL,
   title TEXT NOT NULL,
   book_path TEXT NOT NULL,
-  status TEXT NOT NULL,
-  step_state TEXT NOT NULL DEFAULT 'idle',
-  running_step TEXT,
+  status TEXT NOT NULL CHECK (status IN (
+    'created',
+    'style_done',
+    'characters_done',
+    'portraits_done',
+    'chapters_done',
+    'done'
+  )),
+  step_state TEXT NOT NULL DEFAULT 'idle' CHECK (step_state IN ('idle', 'running', 'failed')),
+  running_step TEXT CHECK (
+    running_step IS NULL OR running_step IN (
+      'style',
+      'characters',
+      'portraits',
+      'chapters',
+      'illustrations'
+    )
+  ),
   step_started_at TEXT,
   step_error TEXT,
   created_at TEXT NOT NULL,

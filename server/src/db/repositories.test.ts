@@ -48,6 +48,7 @@ describe("projects repository", () => {
     const projects = createProjectsRepository(db);
     const user = users.createOrUpdateByEmail({ name: "Mira", email: "mira@example.com" });
     const project = projects.create({
+      id: "project-1",
       userId: user.id,
       title: "The River Book",
       bookPath: "data/books/project.txt",
@@ -70,7 +71,7 @@ describe("projects repository", () => {
     const [listed] = projects.listForUser(user.id);
 
     expect(listed).toMatchObject({
-      id: project.id,
+      id: "project-1",
       userId: user.id,
       title: "The River Book",
       bookPath: "data/books/project.txt",
@@ -154,5 +155,202 @@ describe("projects repository", () => {
       runningStep: "style",
       stepStartedAt: "2026-08-14T00:00:00.000Z"
     });
+  });
+
+  it("only finishes the matching running step", () => {
+    const users = createUsersRepository(db);
+    const projects = createProjectsRepository(db);
+    const user = users.createOrUpdateByEmail({ name: "Mira", email: "mira@example.com" });
+    const project = projects.create({
+      userId: user.id,
+      title: "The River Book",
+      bookPath: "data/books/project.txt"
+    });
+
+    expect(
+      projects.finishStep({
+        projectId: project.id,
+        userId: user.id,
+        step: "style",
+        nextStatus: "style_done"
+      })
+    ).toBe(false);
+
+    expect(
+      projects.setStepRunning({
+        projectId: project.id,
+        userId: user.id,
+        step: "style",
+        expectedStatus: "created"
+      })
+    ).toBe(true);
+
+    expect(
+      projects.finishStep({
+        projectId: project.id,
+        userId: user.id,
+        step: "characters",
+        nextStatus: "characters_done"
+      })
+    ).toBe(false);
+
+    expect(
+      projects.finishStep({
+        projectId: project.id,
+        userId: user.id,
+        step: "style",
+        nextStatus: "style_done"
+      })
+    ).toBe(true);
+
+    expect(projects.findByIdForUser(project.id, user.id)).toMatchObject({
+      status: "style_done",
+      stepState: "idle",
+      runningStep: null
+    });
+  });
+
+  it("only fails the matching running step", () => {
+    const users = createUsersRepository(db);
+    const projects = createProjectsRepository(db);
+    const user = users.createOrUpdateByEmail({ name: "Mira", email: "mira@example.com" });
+    const project = projects.create({
+      userId: user.id,
+      title: "The River Book",
+      bookPath: "data/books/project.txt"
+    });
+
+    expect(
+      projects.failStep({
+        projectId: project.id,
+        userId: user.id,
+        step: "style",
+        error: "Gemini failed"
+      })
+    ).toBe(false);
+
+    projects.setStepRunning({
+      projectId: project.id,
+      userId: user.id,
+      step: "style",
+      expectedStatus: "created"
+    });
+
+    expect(
+      projects.failStep({
+        projectId: project.id,
+        userId: user.id,
+        step: "characters",
+        error: "Wrong step"
+      })
+    ).toBe(false);
+
+    expect(
+      projects.failStep({
+        projectId: project.id,
+        userId: user.id,
+        step: "style",
+        error: "Gemini failed"
+      })
+    ).toBe(true);
+
+    expect(projects.findByIdForUser(project.id, user.id)).toMatchObject({
+      status: "created",
+      stepState: "failed",
+      runningStep: "style",
+      stepError: "Gemini failed"
+    });
+  });
+
+  it("clears failed steps and only stale running steps", () => {
+    const users = createUsersRepository(db);
+    const projects = createProjectsRepository(db);
+    const user = users.createOrUpdateByEmail({ name: "Mira", email: "mira@example.com" });
+    const project = projects.create({
+      userId: user.id,
+      title: "The River Book",
+      bookPath: "data/books/project.txt"
+    });
+
+    projects.setStepRunning({
+      projectId: project.id,
+      userId: user.id,
+      step: "style",
+      expectedStatus: "created",
+      now: "2026-08-14T00:00:00.000Z"
+    });
+
+    expect(
+      projects.clearStaleRunningStep({
+        projectId: project.id,
+        userId: user.id,
+        step: "style",
+        staleBefore: "2026-08-13T23:59:59.000Z"
+      })
+    ).toBe(false);
+
+    expect(
+      projects.clearStaleRunningStep({
+        projectId: project.id,
+        userId: user.id,
+        step: "style",
+        staleBefore: "2026-08-14T00:01:00.000Z"
+      })
+    ).toBe(true);
+
+    projects.setStepRunning({
+      projectId: project.id,
+      userId: user.id,
+      step: "style",
+      expectedStatus: "created"
+    });
+    projects.failStep({
+      projectId: project.id,
+      userId: user.id,
+      step: "style",
+      error: "Gemini failed"
+    });
+
+    expect(
+      projects.clearFailedStep({
+        projectId: project.id,
+        userId: user.id,
+        step: "characters"
+      })
+    ).toBe(false);
+    expect(
+      projects.clearFailedStep({
+        projectId: project.id,
+        userId: user.id,
+        step: "style"
+      })
+    ).toBe(true);
+
+    expect(projects.findByIdForUser(project.id, user.id)).toMatchObject({
+      stepState: "idle",
+      runningStep: null,
+      stepError: null
+    });
+  });
+
+  it("rejects invalid project status and step values at the database layer", () => {
+    const users = createUsersRepository(db);
+    const user = users.createOrUpdateByEmail({ name: "Mira", email: "mira@example.com" });
+
+    expect(() =>
+      db
+        .prepare(
+          "INSERT INTO projects (id, user_id, title, book_path, status, step_state, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        )
+        .run("bad-status", user.id, "Bad", "book.txt", "draft", "idle", "now", "now")
+    ).toThrow();
+
+    expect(() =>
+      db
+        .prepare(
+          "INSERT INTO projects (id, user_id, title, book_path, status, step_state, running_step, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        )
+        .run("bad-step", user.id, "Bad", "book.txt", "created", "running", "animation", "now", "now")
+    ).toThrow();
   });
 });

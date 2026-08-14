@@ -6,7 +6,7 @@ import type {
   PipelineStep,
   Project,
   ProjectStatus,
-  StepState
+  StepState,
 } from "@ai-book/shared";
 
 interface ProjectRow {
@@ -46,7 +46,7 @@ function toCharacter(row: CharacterRow): Character {
     name: row.name,
     prompt: row.prompt,
     portraitPath: row.portrait_path,
-    sortOrder: row.sort_order
+    sortOrder: row.sort_order,
   };
 }
 
@@ -56,11 +56,15 @@ function toChapter(row: ChapterRow): Chapter {
     title: row.title,
     prompt: row.prompt,
     illustrationPath: row.illustration_path,
-    sortOrder: row.sort_order
+    sortOrder: row.sort_order,
   };
 }
 
-function toProject(row: ProjectRow, characters: Character[], chapters: Chapter[]): Project {
+function toProject(
+  row: ProjectRow,
+  characters: Character[],
+  chapters: Chapter[],
+): Project {
   return {
     id: row.id,
     userId: row.user_id,
@@ -75,7 +79,7 @@ function toProject(row: ProjectRow, characters: Character[], chapters: Chapter[]
     updatedAt: row.updated_at,
     style: row.style_text,
     characters,
-    chapters
+    chapters,
   };
 }
 
@@ -115,23 +119,40 @@ export function createProjectsRepository(db: Database.Database) {
   function hydrate(row: ProjectRow | undefined): Project | null {
     if (!row) return null;
 
-    const characters = (findCharacters.all(row.id) as CharacterRow[]).map(toCharacter);
+    const characters = (findCharacters.all(row.id) as CharacterRow[]).map(
+      toCharacter,
+    );
     const chapters = (findChapters.all(row.id) as ChapterRow[]).map(toChapter);
 
     return toProject(row, characters, chapters);
   }
 
   return {
-    create(input: { userId: string; title: string; bookPath: string; now?: string }): Project {
+    create(input: {
+      id?: string;
+      userId: string;
+      title: string;
+      bookPath: string;
+      now?: string;
+    }): Project {
       const now = input.now ?? new Date().toISOString();
-      const projectId = nanoid();
+      const projectId = input.id ?? nanoid();
 
-      db.prepare(`
+      db.prepare(
+        `
         INSERT INTO projects (
           id, user_id, title, book_path, status, step_state, created_at, updated_at
         )
         VALUES (?, ?, ?, ?, 'created', 'idle', ?, ?)
-      `).run(projectId, input.userId, input.title.trim(), input.bookPath, now, now);
+      `,
+      ).run(
+        projectId,
+        input.userId,
+        input.title.trim(),
+        input.bookPath,
+        now,
+        now,
+      );
 
       const project = this.findByIdForUser(projectId, input.userId);
       if (!project) {
@@ -143,7 +164,9 @@ export function createProjectsRepository(db: Database.Database) {
 
     listForUser(userId: string): Project[] {
       const rows = db
-        .prepare(`${projectSelect} WHERE projects.user_id = ? ORDER BY projects.created_at DESC`)
+        .prepare(
+          `${projectSelect} WHERE projects.user_id = ? ORDER BY projects.created_at DESC`,
+        )
         .all(userId) as ProjectRow[];
 
       return rows.map((row) => {
@@ -157,7 +180,9 @@ export function createProjectsRepository(db: Database.Database) {
 
     findByIdForUser(projectId: string, userId: string): Project | null {
       const row = db
-        .prepare(`${projectSelect} WHERE projects.id = ? AND projects.user_id = ?`)
+        .prepare(
+          `${projectSelect} WHERE projects.id = ? AND projects.user_id = ?`,
+        )
         .get(projectId, userId) as ProjectRow | undefined;
 
       return hydrate(row);
@@ -172,7 +197,8 @@ export function createProjectsRepository(db: Database.Database) {
     }): boolean {
       const now = input.now ?? new Date().toISOString();
       const result = db
-        .prepare(`
+        .prepare(
+          `
           UPDATE projects
           SET step_state = 'running',
               running_step = ?,
@@ -182,21 +208,32 @@ export function createProjectsRepository(db: Database.Database) {
           WHERE id = ?
             AND user_id = ?
             AND status = ?
-            AND step_state != 'running'
-        `)
-        .run(input.step, now, now, input.projectId, input.userId, input.expectedStatus);
+            AND step_state = 'idle'
+        `,
+        )
+        .run(
+          input.step,
+          now,
+          now,
+          input.projectId,
+          input.userId,
+          input.expectedStatus,
+        );
 
       return result.changes === 1;
     },
 
     finishStep(input: {
       projectId: string;
-      status: ProjectStatus;
+      userId: string;
+      step: PipelineStep;
+      nextStatus: ProjectStatus;
       now?: string;
-    }): void {
+    }): boolean {
       const now = input.now ?? new Date().toISOString();
 
-      db.prepare(`
+      const result = db.prepare(
+        `
         UPDATE projects
         SET status = ?,
             step_state = 'idle',
@@ -205,24 +242,50 @@ export function createProjectsRepository(db: Database.Database) {
             step_error = NULL,
             updated_at = ?
         WHERE id = ?
-      `).run(input.status, now, input.projectId);
+          AND user_id = ? 
+          AND step_state = 'running'
+          AND running_step = ?
+      `,
+      ).run(input.nextStatus, now, input.projectId, input.userId, input.step);
+
+      return result.changes === 1;
     },
 
-    failStep(input: { projectId: string; error: string; now?: string }): void {
+    failStep(input: {
+      projectId: string;
+      userId: string;
+      step: PipelineStep;
+      error: string;
+      now?: string;
+    }): boolean {
       const now = input.now ?? new Date().toISOString();
 
-      db.prepare(`
+      const result = db.prepare(
+        `
         UPDATE projects
         SET step_state = 'failed',
             step_error = ?,
             updated_at = ?
         WHERE id = ?
-      `).run(input.error, now, input.projectId);
+        AND user_id = ? 
+          AND step_state = 'running'
+          AND running_step = ?
+      `,
+      ).run(input.error, now, input.projectId, input.userId, input.step);
+
+      return result.changes === 1;
     },
 
-    clearStepFailure(input: { projectId: string; userId: string; step: PipelineStep; now?: string }): boolean {
+    clearFailedStep(input: {
+      projectId: string;
+      userId: string;
+      step: PipelineStep;
+      now?: string;
+    }): boolean {
       const now = input.now ?? new Date().toISOString();
-      const result = db.prepare(`
+      const result = db
+        .prepare(
+          `
         UPDATE projects
         SET step_state = 'idle',
             running_step = NULL,
@@ -232,8 +295,39 @@ export function createProjectsRepository(db: Database.Database) {
         WHERE id = ?
           AND user_id = ?
           AND running_step = ?
-          AND step_state IN ('failed', 'running')
-      `).run(now, input.projectId, input.userId, input.step);
+          AND step_state = 'failed'
+      `,
+        )
+        .run(now, input.projectId, input.userId, input.step);
+
+      return result.changes === 1;
+    },
+
+    clearStaleRunningStep(input: {
+      projectId: string;
+      userId: string;
+      step: PipelineStep;
+      staleBefore: string;
+      now?: string;
+    }): boolean {
+      const now = input.now ?? new Date().toISOString();
+      const result = db
+        .prepare(
+          `
+        UPDATE projects
+        SET step_state = 'idle',
+            running_step = NULL,
+            step_started_at = NULL,
+            step_error = NULL,
+            updated_at = ?
+        WHERE id = ?
+          AND user_id = ?
+          AND running_step = ?
+          AND step_state = 'running'
+          AND step_started_at < ?
+      `,
+        )
+        .run(now, input.projectId, input.userId, input.step, input.staleBefore);
 
       return result.changes === 1;
     },
@@ -241,16 +335,22 @@ export function createProjectsRepository(db: Database.Database) {
     saveStyle(input: { projectId: string; text: string; now?: string }): void {
       const now = input.now ?? new Date().toISOString();
 
-      db.prepare(`
+      db.prepare(
+        `
         INSERT INTO styles (project_id, text, created_at)
         VALUES (?, ?, ?)
         ON CONFLICT(project_id) DO UPDATE SET text = excluded.text
-      `).run(input.projectId, input.text, now);
+      `,
+      ).run(input.projectId, input.text, now);
     },
 
     replaceCharacters(input: {
       projectId: string;
-      characters: Array<{ name: string; prompt: string; portraitPath?: string | null }>;
+      characters: Array<{
+        name: string;
+        prompt: string;
+        portraitPath?: string | null;
+      }>;
       now?: string;
     }): void {
       if (input.characters.length > 2) {
@@ -264,7 +364,9 @@ export function createProjectsRepository(db: Database.Database) {
       `);
 
       db.transaction(() => {
-        db.prepare("DELETE FROM characters WHERE project_id = ?").run(input.projectId);
+        db.prepare("DELETE FROM characters WHERE project_id = ?").run(
+          input.projectId,
+        );
         input.characters.forEach((character, index) => {
           insert.run(
             nanoid(),
@@ -273,7 +375,7 @@ export function createProjectsRepository(db: Database.Database) {
             character.prompt,
             character.portraitPath ?? null,
             index,
-            now
+            now,
           );
         });
       })();
@@ -281,7 +383,11 @@ export function createProjectsRepository(db: Database.Database) {
 
     replaceChapters(input: {
       projectId: string;
-      chapters: Array<{ title: string; prompt: string; illustrationPath?: string | null }>;
+      chapters: Array<{
+        title: string;
+        prompt: string;
+        illustrationPath?: string | null;
+      }>;
       now?: string;
     }): void {
       if (input.chapters.length > 1) {
@@ -295,7 +401,9 @@ export function createProjectsRepository(db: Database.Database) {
       `);
 
       db.transaction(() => {
-        db.prepare("DELETE FROM chapters WHERE project_id = ?").run(input.projectId);
+        db.prepare("DELETE FROM chapters WHERE project_id = ?").run(
+          input.projectId,
+        );
         input.chapters.forEach((chapter, index) => {
           insert.run(
             nanoid(),
@@ -304,24 +412,30 @@ export function createProjectsRepository(db: Database.Database) {
             chapter.prompt,
             chapter.illustrationPath ?? null,
             index,
-            now
+            now,
           );
         });
       })();
     },
 
-    setCharacterPortraitPath(input: { characterId: string; portraitPath: string }): void {
+    setCharacterPortraitPath(input: {
+      characterId: string;
+      portraitPath: string;
+    }): void {
       db.prepare("UPDATE characters SET portrait_path = ? WHERE id = ?").run(
         input.portraitPath,
-        input.characterId
+        input.characterId,
       );
     },
 
-    setChapterIllustrationPath(input: { chapterId: string; illustrationPath: string }): void {
+    setChapterIllustrationPath(input: {
+      chapterId: string;
+      illustrationPath: string;
+    }): void {
       db.prepare("UPDATE chapters SET illustration_path = ? WHERE id = ?").run(
         input.illustrationPath,
-        input.chapterId
+        input.chapterId,
       );
-    }
+    },
   };
 }

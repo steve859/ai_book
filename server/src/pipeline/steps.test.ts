@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { expectedStatusBefore, isPipelineStep } from "./steps.js";
+import { expectedStatusBefore, isPipelineStep, statusAfter } from "./steps.js";
 
 describe("pipeline steps", () => {
   it("recognizes only the five required user-triggered steps", () => {
@@ -17,5 +17,13 @@ describe("pipeline steps", () => {
     expect(expectedStatusBefore("portraits")).toBe("characters_done");
     expect(expectedStatusBefore("chapters")).toBe("portraits_done");
     expect(expectedStatusBefore("illustrations")).toBe("chapters_done");
+  });
+
+  it("maps each step to its next completed project status", () => {
+    expect(statusAfter("style")).toBe("style_done");
+    expect(statusAfter("characters")).toBe("characters_done");
+    expect(statusAfter("portraits")).toBe("portraits_done");
+    expect(statusAfter("chapters")).toBe("chapters_done");
+    expect(statusAfter("illustrations")).toBe("done");
   });
 });

@@ -18,3 +18,18 @@ export function expectedStatusBefore(step: PipelineStep): ProjectStatus {
       return "chapters_done";
   }
 }
+
+export function statusAfter(step: PipelineStep): ProjectStatus {
+  switch (step) {
+    case "style":
+      return "style_done";
+    case "characters":
+      return "characters_done";
+    case "portraits":
+      return "portraits_done";
+    case "chapters":
+      return "chapters_done";
+    case "illustrations":
+      return "done";
+  }
+}
