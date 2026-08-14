@@ -14,7 +14,7 @@ function toUser(row: UserRow): User {
     id: row.id,
     name: row.name,
     email: row.email,
-    createdAt: row.created_at
+    createdAt: row.created_at,
   };
 }
 
@@ -22,7 +22,9 @@ export function createUsersRepository(db: Database.Database) {
   return {
     findByEmail(email: string): User | null {
       const row = db
-        .prepare("SELECT id, name, email, created_at FROM users WHERE email = ?")
+        .prepare(
+          "SELECT id, name, email, created_at FROM users WHERE email = ?",
+        )
         .get(email.toLowerCase()) as UserRow | undefined;
 
       return row ? toUser(row) : null;
@@ -36,13 +38,20 @@ export function createUsersRepository(db: Database.Database) {
       return row ? toUser(row) : null;
     },
 
-    createOrUpdateByEmail(input: { name: string; email: string; now?: string }): User {
+    createOrUpdateByEmail(input: {
+      name: string;
+      email: string;
+      now?: string;
+    }): User {
       const email = input.email.trim().toLowerCase();
       const name = input.name.trim();
       const existing = this.findByEmail(email);
 
       if (existing) {
-        db.prepare("UPDATE users SET name = ? WHERE id = ?").run(name, existing.id);
+        db.prepare("UPDATE users SET name = ? WHERE id = ?").run(
+          name,
+          existing.id,
+        );
         return { ...existing, name };
       }
 
@@ -50,14 +59,17 @@ export function createUsersRepository(db: Database.Database) {
         id: nanoid(),
         name,
         email,
-        createdAt: input.now ?? new Date().toISOString()
+        createdAt: input.now ?? new Date().toISOString(),
       };
 
       db.prepare(
-        "INSERT INTO users (id, name, email, created_at) VALUES (?, ?, ?, ?)"
+        "INSERT INTO users (id, name, email, created_at) VALUES (?, ?, ?, ?) \
+        ON CONFLICT(email) DO UPDATE SET \
+          name = excluded.name \
+        RETURNING id, name, email, created_at",
       ).run(user.id, user.name, user.email, user.createdAt);
 
       return user;
-    }
+    },
   };
 }
