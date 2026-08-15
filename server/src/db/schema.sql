@@ -12,6 +12,9 @@ CREATE TABLE IF NOT EXISTS projects (
   user_id TEXT NOT NULL,
   title TEXT NOT NULL,
   book_path TEXT NOT NULL,
+  gemini_file_name TEXT,
+  gemini_file_uri TEXT,
+  gemini_file_expires_at TEXT,
   status TEXT NOT NULL CHECK (status IN (
     'created',
     'style_done',

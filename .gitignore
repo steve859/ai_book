@@ -1,6 +1,7 @@
 .env
 node_modules/
 dist/
+*.tsbuildinfo
 coverage/
 data/
 ai_book/

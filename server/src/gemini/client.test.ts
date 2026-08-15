@@ -95,6 +95,38 @@ describe("Gemini REST client", () => {
     expect(generationBody.generationConfig.responseMimeType).toBe("application/json");
   });
 
+  it("reuses a persisted book reference in a new client instance", async () => {
+    const filePath = bookFile();
+    const reference = {
+      name: "files/book-1",
+      uri: "https://files.example/book-1",
+      mimeType: "text/plain",
+      expirationTime: "2099-08-17T00:00:00.000Z",
+    };
+    const fileStore = {
+      get: vi.fn(() => reference),
+      save: vi.fn(),
+    };
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ candidates: [{ content: { parts: [{ text: "Ink wash" }] } }] }),
+    );
+    const client = createGeminiClient({
+      apiKey: "test-key",
+      fetchImpl: fetchMock as typeof fetch,
+      fileStore,
+    });
+
+    await expect(client.generateStyle(filePath)).resolves.toBe("Ink wash");
+
+    expect(fileStore.get).toHaveBeenCalledWith(path.resolve(filePath));
+    expect(fileStore.save).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
+      contents: Array<{ parts: Array<{ fileData?: { fileUri: string } }> }>;
+    };
+    expect(body.contents[0].parts[1].fileData?.fileUri).toBe(reference.uri);
+  });
+
   it("decodes an image returned by the image model", async () => {
     const image = Buffer.from("generated-image");
     const fetchMock = vi.fn().mockResolvedValue(
