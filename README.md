@@ -74,6 +74,8 @@ Development URLs:
 - Backend: http://localhost:3000
 - Health check: http://localhost:3000/api/health
 
+Docker is not required because the application uses local SQLite and filesystem storage and runs directly with Node.js.
+
 ## Run Tests
 
 Run lint, type checking, and all tests:
@@ -138,7 +140,7 @@ server/data/
   images/
 ```
 
-SQLite stores users, projects, pipeline state, prompts, and asset paths. Book text and generated images are stored on the filesystem.
+SQLite stores users, projects, pipeline state, prompts, asset paths, and reusable Gemini file references. Book text and generated images are stored on the filesystem.
 
 ## Project Structure
 

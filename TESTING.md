@@ -13,15 +13,15 @@ npm test
 npm run build
 ```
 
-The latest full test run passed 41 tests across 8 test files:
+The latest full test run passed 46 tests across 8 test files:
 
-- Client UI: sign in, restore an existing session, list projects, and open project details.
+- Client UI: sign in, session restore, project list and empty state, project details, named running state, failed state, and retry action.
 - Session API: create, restore, validate, and clear cookie-based sessions.
 - Project API: authentication, project ownership, project creation, book storage, and full project loading.
 - Five-step pipeline: Style, Characters, Portraits, Chapters, and Illustrations execute in the required order and persist their output.
 - Retry behavior: failed steps and stale running steps can be reset; fresh running steps cannot be retried.
 - SQLite repositories: user normalization, project hydration, hard limits, database constraints, and atomic step transitions.
-- Gemini REST client: API key validation, one-time book upload reuse, structured generation, and image response decoding. Network calls are mocked in these tests.
+- Gemini REST client: API key validation, one-time book upload reuse, persisted reference reuse after a client restart, structured generation, and image response decoding. Network calls are mocked in these tests.
 - Mock Gemini client: deterministic output for all five steps and forced failures for retry testing.
 
 ## Manual end-to-end test
@@ -63,8 +63,46 @@ MOCK_GEMINI_FAIL_STEP=characters
 
 Valid values are `style`, `characters`, `portraits`, `chapters`, and `illustrations`. Restart the server after changing environment variables.
 
+## Latest test report
+
+This is the relevant output from a real `./test.sh` run on August 15, 2026:
+
+```text
+> lint
+> npm run lint --workspaces --if-present
+
+> typecheck
+> npm run typecheck --workspaces --if-present
+
+> test
+> npm run test --workspaces --if-present
+
+RUN  v1.6.1 client
+✓ src/ui/App.test.tsx  (5 tests)
+Test Files  1 passed (1)
+Tests       5 passed (5)
+
+RUN  v1.6.1 server
+✓ src/gemini/fakeClient.test.ts       (2 tests)
+✓ src/pipeline/steps.test.ts          (3 tests)
+✓ src/pipeline/pipelineService.test.ts (2 tests)
+✓ src/gemini/client.test.ts           (4 tests)
+✓ src/db/repositories.test.ts         (9 tests)
+✓ src/routes/session.test.ts          (5 tests)
+✓ src/routes/projects.test.ts         (16 tests)
+Test Files  7 passed (7)
+Tests       41 passed (41)
+
+> build
+> npm run build --workspace server && npm run build --workspace client
+
+vite v5.4.21 building for production...
+✓ 1583 modules transformed.
+✓ built in 1.01s
+```
+
 ## Not covered
 
-- Automated browser screenshots or visual regression tests.
+- Automated browser screenshots, visual regression tests, and full browser E2E. Component and route integration tests cover the important states with less setup for this assessment's scope.
 - Real Gemini failure modes such as rate limits, service outages, and interrupted uploads.
 - Concurrent execution across multiple Node.js server processes. Atomic SQLite updates are tested within the current single-server architecture.
