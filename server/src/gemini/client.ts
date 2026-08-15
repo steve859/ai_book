@@ -148,7 +148,7 @@ function imageMimeType(filePath: string) {
 
 export function createGeminiClient(options: GeminiClientOptions = {}): GeminiClient {
   const apiKey = options.apiKey ?? process.env.GEMINI_API_KEY;
-  const textModel = options.textModel ?? process.env.GEMINI_TEXT_MODEL ?? "gemini-2.5-flash";
+  const textModel = options.textModel ?? process.env.GEMINI_TEXT_MODEL ?? "gemini-3.6-flash";
   const imageModel =
     options.imageModel ?? process.env.GEMINI_IMAGE_MODEL ?? "gemini-2.5-flash-image";
   const fetchImpl = options.fetchImpl ?? fetch;

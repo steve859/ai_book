@@ -29,7 +29,7 @@ afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
-function routeHandler(method: "post" | "delete") {
+function routeHandler(method: "get" | "post" | "delete") {
   const router = createSessionRouter(createAppContext(db));
   const layer = (router.stack as RouteLayer[]).find(
     (item) => item.route?.path === "/" && item.route.methods[method],
@@ -73,6 +73,37 @@ function createResponse() {
 }
 
 describe("session routes", () => {
+  it("restores the current user from the session cookie", () => {
+    const context = createAppContext(db);
+    const user = context.users.createOrUpdateByEmail({
+      name: "Mira Hassan",
+      email: "mira@example.com",
+    });
+    const router = createSessionRouter(context);
+    const layer = (router.stack as RouteLayer[]).find(
+      (item) => item.route?.path === "/" && item.route.methods.get,
+    );
+    const res = createResponse();
+
+    layer?.route?.stack[0]?.handle(
+      { cookies: { ai_book_user_id: user.id } } as unknown as Request,
+      res as unknown as Response,
+      () => undefined,
+    );
+
+    expect(res.body).toEqual({ user });
+  });
+
+  it("rejects session restore without a valid cookie", () => {
+    const handler = routeHandler("get");
+    const res = createResponse();
+
+    handler({ cookies: {} } as Request, res as unknown as Response, () => undefined);
+
+    expect(res.statusCode).toBe(401);
+    expect(res.body).toEqual({ error: "No active session." });
+  });
+
   it("creates a session for a valid name and email", () => {
     const handler = routeHandler("post");
     const req = { body: { name: "Mira Hassan", email: "MIRA@example.com" } };

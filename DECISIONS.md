@@ -19,3 +19,17 @@ I store completed progress separately from the current running step. status keep
 I use one SQLite update to start a pipeline step. The update only succeeds if the previous step is completed and no other step is running.
 
 This prevents two requests from running the same step and calling Gemini twice. The trade-off is slightly more complex SQL and concurrency testing.
+
+## Run pipeline steps synchronously without a job queue
+
+Codex suggested using BullMQ for background jobs, but I decided not to use it because the pipeline only has five sequential steps and BullMQ would add unnecessary complexity.
+
+Each step runs directly in the Express request. SQLite is used to make sure the same step cannot run twice at the same time.
+
+This keeps the system simple. The trade-off is that a long Gemini request depends on the server process, and a restart may leave a step marked as running until it is reset.
+
+## Store book text, generated images as files
+
+I store uploaded book text and generated images on the local filesystem. SQLite stores only their relative paths together with the structured project data.
+
+This keeps the database small and allows Express to serve generated images directly. It also avoids encoding image blobs during normal project queries. The trade-off is that the database and data directory must be backed up and moved together, and deleting a project requires cleaning up both database rows and files.

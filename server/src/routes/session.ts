@@ -11,6 +11,18 @@ const sessionSchema = z.object({
 export function createSessionRouter(context: AppContext) {
   const router = Router();
 
+  router.get("/", (req, res) => {
+    const userId = req.cookies?.[sessionCookie];
+    const user = typeof userId === "string" ? context.users.findById(userId) : null;
+
+    if (!user) {
+      res.status(401).json({ error: "No active session." });
+      return;
+    }
+
+    res.json({ user });
+  });
+
   router.post("/", (req, res) => {
     const parsed = sessionSchema.safeParse(req.body);
 

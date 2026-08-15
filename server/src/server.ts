@@ -1,6 +1,7 @@
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import express from "express";
+import path from "node:path";
 import type { AppContext } from "./appContext.js";
 import { createAppContext } from "./appContext.js";
 import { createProjectRouter } from "./routes/projects.js";
@@ -17,6 +18,10 @@ export function createServer(context: AppContext = createAppContext()) {
     res.json({ ok: true });
   });
 
+  app.use(
+    "/api/assets/images",
+    express.static(path.resolve(process.env.DATA_DIR ?? "data", "images")),
+  );
   app.use("/api/session", createSessionRouter(context));
   app.use("/api/projects", createProjectRouter(context));
 
