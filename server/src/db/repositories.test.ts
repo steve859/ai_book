@@ -89,6 +89,33 @@ describe("projects repository", () => {
     expect(listed.chapters[0]).toMatchObject({ title: "Opening Scene", sortOrder: 0 });
   });
 
+  it("persists a Gemini file reference by book path", () => {
+    const users = createUsersRepository(db);
+    const projects = createProjectsRepository(db);
+    const user = users.createOrUpdateByEmail({ name: "Mira", email: "mira@example.com" });
+    projects.create({
+      userId: user.id,
+      title: "The River Book",
+      bookPath: "books/project.txt",
+    });
+
+    expect(projects.getGeminiFileReference("books/project.txt")).toBeNull();
+    expect(
+      projects.saveGeminiFileReference({
+        bookPath: "books/project.txt",
+        name: "files/book-1",
+        uri: "https://files.example/book-1",
+        expirationTime: "2026-08-17T00:00:00.000Z",
+      }),
+    ).toBe(true);
+    expect(projects.getGeminiFileReference("books/project.txt")).toEqual({
+      name: "files/book-1",
+      uri: "https://files.example/book-1",
+      mimeType: "text/plain",
+      expirationTime: "2026-08-17T00:00:00.000Z",
+    });
+  });
+
   it("enforces character and chapter caps before writing", () => {
     const users = createUsersRepository(db);
     const projects = createProjectsRepository(db);

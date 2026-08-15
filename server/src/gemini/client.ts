@@ -30,12 +30,19 @@ interface GeminiClientOptions {
   textModel?: string;
   imageModel?: string;
   fetchImpl?: typeof fetch;
+  fileStore?: GeminiFileStore;
 }
 
-interface GeminiFile {
+export interface GeminiFileReference {
   name: string;
   uri: string;
   mimeType: string;
+  expirationTime: string | null;
+}
+
+export interface GeminiFileStore {
+  get(bookPath: string): GeminiFileReference | null;
+  save(bookPath: string, file: GeminiFileReference): void;
 }
 
 interface GeminiPart {
@@ -152,7 +159,7 @@ export function createGeminiClient(options: GeminiClientOptions = {}): GeminiCli
   const imageModel =
     options.imageModel ?? process.env.GEMINI_IMAGE_MODEL ?? "gemini-2.5-flash-image";
   const fetchImpl = options.fetchImpl ?? fetch;
-  const uploadedBooks = new Map<string, Promise<GeminiFile>>();
+  const uploadedBooks = new Map<string, Promise<GeminiFileReference>>();
 
   function requireApiKey() {
     if (!apiKey) {
@@ -174,7 +181,7 @@ export function createGeminiClient(options: GeminiClientOptions = {}): GeminiCli
     }
   }
 
-  async function uploadBook(bookPath: string): Promise<GeminiFile> {
+  async function uploadBook(bookPath: string): Promise<GeminiFileReference> {
     const key = requireApiKey();
     const bytes = await fs.promises.readFile(bookPath);
     const startResponse = await fetchImpl(`${API_BASE}/upload/v1beta/files`, {
@@ -208,7 +215,7 @@ export function createGeminiClient(options: GeminiClientOptions = {}): GeminiCli
       },
       body: bytes,
     });
-    const result = await parseJsonResponse<{ file?: Partial<GeminiFile> }>(
+    const result = await parseJsonResponse<{ file?: Partial<GeminiFileReference> }>(
       uploadResponse,
       "file upload",
     );
@@ -217,7 +224,16 @@ export function createGeminiClient(options: GeminiClientOptions = {}): GeminiCli
       throw new Error("Gemini file upload returned no file reference.");
     }
 
-    return { name: file.name, uri: file.uri, mimeType: file.mimeType ?? "text/plain" };
+    return {
+      name: file.name,
+      uri: file.uri,
+      mimeType: file.mimeType ?? "text/plain",
+      expirationTime: file.expirationTime ?? null,
+    };
+  }
+
+  function isUsable(file: GeminiFileReference) {
+    return !file.expirationTime || Date.parse(file.expirationTime) > Date.now();
   }
 
   function getBook(bookPath: string) {
@@ -225,10 +241,22 @@ export function createGeminiClient(options: GeminiClientOptions = {}): GeminiCli
     const existing = uploadedBooks.get(absolutePath);
     if (existing) return existing;
 
-    const upload = uploadBook(absolutePath).catch((error: unknown) => {
-      uploadedBooks.delete(absolutePath);
-      throw error;
-    });
+    const persisted = options.fileStore?.get(absolutePath);
+    if (persisted && isUsable(persisted)) {
+      const reference = Promise.resolve(persisted);
+      uploadedBooks.set(absolutePath, reference);
+      return reference;
+    }
+
+    const upload = uploadBook(absolutePath)
+      .then((file) => {
+        options.fileStore?.save(absolutePath, file);
+        return file;
+      })
+      .catch((error: unknown) => {
+        uploadedBooks.delete(absolutePath);
+        throw error;
+      });
     uploadedBooks.set(absolutePath, upload);
     return upload;
   }

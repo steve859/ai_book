@@ -40,6 +40,12 @@ interface ChapterRow {
   sort_order: number;
 }
 
+interface GeminiFileRow {
+  gemini_file_name: string | null;
+  gemini_file_uri: string | null;
+  gemini_file_expires_at: string | null;
+}
+
 function toCharacter(row: CharacterRow): Character {
   return {
     id: row.id,
@@ -186,6 +192,43 @@ export function createProjectsRepository(db: Database.Database) {
         .get(projectId, userId) as ProjectRow | undefined;
 
       return hydrate(row);
+    },
+
+    getGeminiFileReference(bookPath: string) {
+      const row = db
+        .prepare(
+          `SELECT gemini_file_name, gemini_file_uri, gemini_file_expires_at
+           FROM projects
+           WHERE book_path = ?`,
+        )
+        .get(bookPath) as GeminiFileRow | undefined;
+
+      if (!row?.gemini_file_name || !row.gemini_file_uri) return null;
+      return {
+        name: row.gemini_file_name,
+        uri: row.gemini_file_uri,
+        mimeType: "text/plain",
+        expirationTime: row.gemini_file_expires_at,
+      };
+    },
+
+    saveGeminiFileReference(input: {
+      bookPath: string;
+      name: string;
+      uri: string;
+      expirationTime: string | null;
+    }): boolean {
+      const result = db
+        .prepare(
+          `UPDATE projects
+           SET gemini_file_name = ?,
+               gemini_file_uri = ?,
+               gemini_file_expires_at = ?
+           WHERE book_path = ?`,
+        )
+        .run(input.name, input.uri, input.expirationTime, input.bookPath);
+
+      return result.changes === 1;
     },
 
     setStepRunning(input: {
