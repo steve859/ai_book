@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-npm install
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT_DIR"
+
+if [[ ! -d node_modules ]]; then
+  npm ci
+fi
+
 npm run lint
 npm run typecheck
 npm test
+npm run build

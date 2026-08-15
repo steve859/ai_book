@@ -1,5 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-npm install
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT_DIR"
+
+if [[ ! -f .env ]]; then
+  cp .env.example .env
+  echo "Created .env from .env.example. Configure GEMINI_MODE before generating content."
+fi
+
+if [[ ! -d node_modules ]]; then
+  npm ci
+fi
+
 npm run dev
